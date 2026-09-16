@@ -1,51 +1,59 @@
-// sw.js - Service Worker do VAI DE BOA! MUSIC
+/* ═══════════════════════════════════════════════════════════
+   📲 SERVICE WORKER — VAI DE BOA! MUSIC
+   ═══════════════════════════════════════════════════════════ */
+
 const CACHE_NAME = 'vdb-music-v1';
-const urlsToCache = [
-    './',
-    './index.html',
-    './favicon30.png'
+const CACHE_URLS = [
+  './',
+  './index.html',
+  './manifest.json'
 ];
 
+// Instala e faz cache básico
 self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll(urlsToCache).catch(() => {});
-        })
-    );
-    self.skipWaiting();
+  console.log('🔧 SW: instalando...');
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(CACHE_URLS))
+      .then(() => self.skipWaiting())
+  );
 });
 
+// Ativa e limpa caches antigos
 self.addEventListener('activate', (event) => {
-    event.waitUntil(
-        caches.keys().then((names) => {
-            return Promise.all(
-                names.filter(n => n !== CACHE_NAME).map(n => caches.delete(n))
-            );
-        })
-    );
-    self.clients.claim();
+  console.log('✅ SW: ativado!');
+  event.waitUntil(
+    caches.keys().then((nomes) => {
+      return Promise.all(
+        nomes.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
+// Intercepta requisições
 self.addEventListener('fetch', (event) => {
-    // Ignora requisições não-GET e cross-origin complicados
-    if (event.request.method !== 'GET') return;
-    if (event.request.url.includes('raw.githubusercontent.com')) {
-        // Músicas: sempre tenta rede primeiro
-        event.respondWith(
-            fetch(event.request).catch(() => caches.match(event.request))
-        );
-        return;
-    }
-    // Resto: cache-first
-    event.respondWith(
-        caches.match(event.request).then((res) => {
-            return res || fetch(event.request).then((response) => {
-                if (response && response.status === 200) {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
-                }
-                return response;
-            }).catch(() => caches.match('./index.html'));
-        })
-    );
+  const { request } = event;
+
+  // Ignora requisições que não sejam GET
+  if (request.method !== 'GET') return;
+
+  // Ignora requisições externas (deixa passar direto)
+  if (request.url.includes('raw.githubusercontent.com')) return;
+  if (request.url.includes('api.qrserver.com')) return;
+  if (request.url.includes('fonts.googleapis.com')) return;
+  if (request.url.includes('fonts.gstatic.com')) return;
+  if (request.url.includes('cdnjs.cloudflare.com')) return;
+
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(request, clone).catch(() => {});
+        });
+        return response;
+      })
+      .catch(() => caches.match(request))
+  );
 });
